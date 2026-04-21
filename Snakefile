@@ -5,9 +5,8 @@ import shutil
 
 from snakemake.common.configfile import load_configfile
 
-# add vars that users likely don't need
-# if they need them, they'll be loaded next
-config["delta_df_mod"] = "delta_df <- delta_df"
+# Default: no-op in Python syntax
+config["delta_df_mod"] = ""
 
 if not os.path.exists(config["out"]):
     os.makedirs(config["out"])
@@ -25,7 +24,6 @@ config["path_dim_pca"] = "DIM-PCA/"
 config["path_dim_scnic"] = "DIM-SCNIC/"
 config["path_dim_preprocess"] = "DIM-preprocess/"
 
-# can simplifity this code
 config["path_original"] = "SELECTED-FEATURES-original/"
 config["path_first"] = "SELECTED-FEATURES-first/"
 config["path_previous"] = "SELECTED-FEATURES-previous/"
@@ -46,7 +44,7 @@ rule all:
         first = f"{out_dir}SELECTED-FEATURES-first/first.pdf",
         previous = f"{out_dir}SELECTED-FEATURES-previous/previous.pdf",
         pairwise = f"{out_dir}SELECTED-FEATURES-pairwise/pairwise.pdf",
-        md_doc = f"{out_dir}EXPLANA-report.html"
+        summary = f"{out_dir}important-feature-occurrences.svg",
 
 
 index = sys.argv.index("--configfile")
@@ -121,10 +119,6 @@ def get_preprocess_method(wildcards):
     method = input_datasets[wildcards.preprocess_ds_name]["dim_param_dict"]["method"]
     return method
 
-# def get_pca_df_mod(wildcards):
-#     df_mod = input_datasets[wildcards.pca_ds_name]["df_mod"]
-#     return df_mod
-
 def get_pca_in_file(wildcards):
     in_file = input_datasets[wildcards.pca_ds_name]["file_path"]
     return in_file
@@ -157,12 +151,12 @@ rule preprocess:
             preprocess_ds_name=config["preprocess_ds_list"]),
         method = get_preprocess_method,
         df_mod = get_preprocess_df_mod
-    conda: "conda_envs/r_env.yaml",
+    conda: "conda_envs/merf.yaml",
     script:
-        "scripts/preprocess.R"
+        "scripts/preprocess.py"
 
 
-# Perform dimensionality reduction using principal coordinates analysis (PCA)
+# Perform dimensionality reduction using principal component analysis (PCA)
 # Can perform PCA on as many variables as you would like using config file
 rule dim_reduction_pca:
     input:
@@ -174,12 +168,11 @@ rule dim_reduction_pca:
         dataset_name = expand("{pca_ds_name}",
             pca_ds_name=config["pca_ds_list"]),
         pca_list = get_pca_list,
-    conda: "conda_envs/r_env.yaml",
+    conda: "conda_envs/merf.yaml",
     script:
-        "scripts/dim_reduction_pca.R"
+        "scripts/dim_reduction_pca.py"
 
 
-# TODO remove in_file_metadata
 rule dim_reduction_scnic:
     input:
         in_file = get_scnic_in_file,
@@ -196,8 +189,7 @@ rule dim_reduction_scnic:
         "scripts/dim_reduction_scnic.py"
 
 
-# After doing dimensinoality reductions and filters on individual datasets
-# TODO handle biom tables; for now, must be 
+# After doing dimensionality reductions and filters on individual datasets
 rule integrate_datasets:
     input:
         file_path_list = config["file_path_list"],
@@ -205,9 +197,9 @@ rule integrate_datasets:
         out_file = path_original + "original.txt"
     params:
         ds_param_dict_list = config["ds_param_dict_list"],
-    conda: "conda_envs/r_env.yaml",
+    conda: "conda_envs/merf.yaml",
     script:
-        "scripts/integrate_datasets.R"
+        "scripts/integrate_datasets.py"
 
 
 # Create "delta datasets"; differences between samples from different
@@ -223,9 +215,9 @@ rule make_delta_datasets:
         include_reference_values = config["include_reference_values"],
         absolute_values = config["absolute_values"],
         distance_matrices = config["distance_matrices"],
-    conda: "conda_envs/r_env.yaml",
+    conda: "conda_envs/merf.yaml",
     script:
-        "scripts/create_deltas.R"
+        "scripts/create_deltas.py"
 
 
 rule random_forest:
@@ -269,7 +261,7 @@ rule shap_plots:
         "scripts/shap_plots.py"
 
 
-rule final_steps_r:
+rule final_steps_summary:
     input:
         selected_features_original = path_original + "original-boruta-important.txt",
         selected_features_first = path_first + "first-boruta-important.txt",
@@ -278,13 +270,13 @@ rule final_steps_r:
     output:
         out_file = out_dir + "all-important-features.txt",
         out_file_image = out_dir + "important-feature-occurrences.svg",
-    conda: "conda_envs/r_env.yaml",
+    conda: "conda_envs/merf.yaml",
     script:
-        "scripts/final_steps.R"
+        "scripts/final_steps_summary.py"
 
 
 rule final_steps_python:
-    input: 
+    input:
         feature_file = out_dir + "all-important-features.txt",
         original_features = path_original + "original-boruta-important.txt",
         first_features = path_first + "first-boruta-important.txt",
@@ -295,18 +287,3 @@ rule final_steps_python:
     conda: "conda_envs/merf.yaml",
     script:
         "scripts/final_steps.py"
-
-
-rule render_report:
-    input:
-        original_pdf = path_original + "original.pdf",
-        first_pdf = path_first + "first.pdf",
-        previous_pdf = path_previous + "previous.pdf",
-        pairwise_pdf = path_pairwise + "pairwise.pdf",
-        feature_occurances = out_dir + "important-feature-occurrences.svg",
-        urls = out_dir + "urls.txt",
-    output:
-        md_doc = out_dir + "EXPLANA-report.html",
-    conda: "conda_envs/r_env.yaml",
-    script:
-        "scripts/report.Rmd"
