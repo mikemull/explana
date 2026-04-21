@@ -3,7 +3,7 @@ analyst: "Jennifer Fouquier"
 response_var: "happiness"
 include_time: "yes"
 
-random_effect: "study_id" 
+random_effect: "study_id"
 sample_id: "sample_id"
 timepoint: "timepoint"
 out: "workflow-results/EXPLANA-install-test/"
@@ -24,16 +24,17 @@ analyze_pairwise: "yes"
 absolute_values: "no"
 include_reference_values: "no"
 
-analysis_notes: "INSTALLATION TESTS ONLY: Results are not intented for interpretation; ALL PASS"
+analysis_notes: "INSTALLATION TESTS ONLY: Results are not intended for interpretation; ALL PASS"
 enc_percent_threshold: "0"
 
-distance_matrices: "list(aitchison='data/install-test/simulation-small-aitchison-dm.txt')"
+# distance_matrices: dict of {name: path} — leave empty if not used
+distance_matrices:
+  aitchison: "data/install-test/simulation-small-aitchison-dm.txt"
 
+# df_mod: pandas Python code applied to df after dataset integration
+# Example: df = df.drop(columns=['sunshine'])
 df_mod: |
-      df <- df %>% 
-        select(
-          -sunshine
-        )
+  df = df.drop(columns=['sunshine'])
 
 input_datasets:
   metadata:
@@ -55,12 +56,9 @@ input_datasets:
     dim_param_dict:
       pca_list:
         pca_microbes:
-          feature_list: "c('da_microbe1_comp', 'da_microbe2_comp','da_microbe3_comp','da_microbe4_comp')"
-          cum_var_thres: "70"
-
-
-
-
-
-
-
+          feature_list:
+            - da_microbe1_comp
+            - da_microbe2_comp
+            - da_microbe3_comp
+            - da_microbe4_comp
+          cum_var_thres: 70
